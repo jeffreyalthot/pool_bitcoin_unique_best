@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+  <h1>Bienvenue {{ username }}</h1>
+  <p>Statut RPC Bitcoin Core: <strong>{{ rpc_status }}</strong></p>
+  {% if info %}
+    <h2>Infos blockchain</h2>
+    <pre>{{ info | tojson(indent=2) }}</pre>
+  {% endif %}
+</div>
+{% endblock %}
