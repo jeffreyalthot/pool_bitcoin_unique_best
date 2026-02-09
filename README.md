@@ -31,3 +31,14 @@ python stratum_server.py
 ```
 
 Le serveur Stratum n'utilise pas `getnetworkhashps` afin d'éviter d'influencer la difficulté réseau.
+
+## Commandes RPC utiles pour le pool (Blockchain)
+Liste triée et réduite aux appels nécessaires pour suivre l'état de la chaîne et des blocs:
+
+- `getbestblockhash`
+- `getblock "blockhash" ( verbosity )`
+- `getblockchaininfo`
+- `getblockcount`
+- `getblockhash height`
+- `getblockheader "blockhash" ( verbose )`
+- `getdifficulty`
