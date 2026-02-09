@@ -5,6 +5,8 @@
   <h1>Bienvenue {{ username }}</h1>
   <p>Statut RPC Bitcoin Core: <strong>{{ rpc_status }}</strong></p>
   <p>URL Stratum recommandée: <strong>{{ stratum_public_url }}</strong></p>
+  <p>Identifiant pool: <strong>{{ pool_username }}</strong></p>
+  <p>Mot de passe pool par défaut: <strong>{{ pool_password }}</strong></p>
   {% if info %}
     <h2>Infos blockchain</h2>
     <pre>{{ info | tojson(indent=2) }}</pre>
