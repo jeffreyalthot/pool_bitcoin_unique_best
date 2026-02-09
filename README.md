@@ -16,6 +16,7 @@ Variables d'environnement utiles:
 - `BITCOIN_RPC_PASSWORD`
 - `STRATUM_HOST` (par défaut `0.0.0.0`)
 - `STRATUM_PORT` (par défaut `3333`)
+- `STRATUM_PUBLIC_URL` (par défaut `stratum+tcp://bac.elit21.pool:3333`)
 - `POOL_SECRET_KEY`
 
 ## Lancer le service web
@@ -29,6 +30,16 @@ python app.py
 ```bash
 python stratum_server.py
 ```
+
+## URL Stratum (production)
+URL à fournir aux mineurs pour se connecter au pool:
+
+```
+stratum+tcp://bac.elit21.pool:3333
+```
+
+Si vous changez l'adresse publique (DNS, port ou proxy), mettez à jour
+`STRATUM_PUBLIC_URL` pour que l'interface web indique la bonne cible.
 
 Le serveur Stratum n'utilise pas `getnetworkhashps` afin d'éviter d'influencer la difficulté réseau.
 
@@ -55,3 +66,26 @@ sans déclarer de hash rate auprès de Bitcoin Core:
 - `submitblock "hexdata" ( dummy )`
 - `submitheader "hexdata"`
 - `testblockvalidity "block_hex"`
+
+## Commandes Stratum utilisées entre pool et mineurs
+Liste des commandes de communication (mineur -> pool / pool -> mineur) pertinentes
+pour un assemblage post-production propre et stable.
+
+### Mineur -> Pool
+- `mining.subscribe` : initialisation de la session et négociation des paramètres.
+- `mining.authorize` : authentification/logique d'identité du mineur.
+- `mining.submit` : soumission d'un share ou d'un bloc candidat.
+- `mining.extranonce.subscribe` : abonnement aux mises à jour d'extranonce.
+- `mining.configure` : négociation des extensions (ex: version-rolling).
+- `mining.ping` : keep-alive léger.
+
+### Pool -> Mineur
+- `mining.set_difficulty` : mise à jour de la difficulté de share.
+- `mining.notify` : envoi d'un nouveau job.
+- `mining.set_extranonce` : mise à jour d'extranonce (si supporté).
+- `mining.set_nonce_range` : répartition des plages de nonce (implémenté ici).
+
+> Remarque: ce serveur implémente actuellement `mining.subscribe`,
+`mining.authorize`, `mining.submit` et `mining.set_nonce_range`. Les autres
+commandes sont listées pour compléter la communication pool/mineur en
+environnement de production.
