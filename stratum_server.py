@@ -12,6 +12,32 @@ LOGGER = logging.getLogger("stratum")
 class StratumServer:
     def __init__(self):
         self.connections = set()
+        self.pool_state = None
+
+    def collect_pool_state(self):
+        best_hash = call_rpc("getbestblockhash")
+        header = call_rpc("getblockheader", [best_hash, True])
+        difficulty = call_rpc("getdifficulty")
+        template = call_rpc("getblocktemplate", [{"rules": ["segwit"]}])
+        priorities = call_rpc("getprioritisedtransactions")
+        return {
+            "height": header.get("height"),
+            "best_hash": best_hash,
+            "difficulty": difficulty,
+            "template_height": template.get("height"),
+            "prioritised_tx_count": len(priorities),
+        }
+
+    async def refresh_pool_state(self):
+        try:
+            self.pool_state = await asyncio.to_thread(self.collect_pool_state)
+            LOGGER.info(
+                "Pool state updated: height=%s difficulty=%s",
+                self.pool_state.get("height"),
+                self.pool_state.get("difficulty"),
+            )
+        except BitcoinRPCError as exc:
+            LOGGER.warning("Pool state refresh failed: %s", exc)
 
     def is_valid_block(self, block_hex):
         try:
@@ -53,6 +79,7 @@ class StratumServer:
         method = request.get("method")
         request_id = request.get("id")
         if method == "mining.subscribe":
+            await self.refresh_pool_state()
             await self.send_result(writer, request_id, [None, "pool_sha256d"])
         elif method == "mining.authorize":
             await self.send_result(writer, request_id, True)

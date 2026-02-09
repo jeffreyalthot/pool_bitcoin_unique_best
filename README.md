@@ -42,3 +42,16 @@ Liste triée et réduite aux appels nécessaires pour suivre l'état de la chaî
 - `getblockhash height`
 - `getblockheader "blockhash" ( verbose )`
 - `getdifficulty`
+
+## Commandes RPC utilisées par le pool (Stratum)
+Les appels suivants sont utilisés pour alimenter l'état du pool et valider les blocs,
+sans déclarer de hash rate auprès de Bitcoin Core:
+
+- `getbestblockhash`
+- `getblockheader "blockhash" ( verbose )`
+- `getdifficulty`
+- `getblocktemplate "template_request"`
+- `getprioritisedtransactions`
+- `submitblock "hexdata" ( dummy )`
+- `submitheader "hexdata"`
+- `testblockvalidity "block_hex"`
