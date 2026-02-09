@@ -13,6 +13,18 @@ class StratumServer:
     def __init__(self):
         self.connections = set()
 
+    def is_valid_block(self, block_hex):
+        try:
+            result = call_rpc("testblockvalidity", [block_hex])
+        except BitcoinRPCError as exc:
+            LOGGER.warning("testblockvalidity failed: %s", exc)
+            return False
+        if isinstance(result, bool):
+            return result
+        if isinstance(result, dict):
+            return result.get("valid", False)
+        return False
+
     async def handle_client(self, reader, writer):
         addr = writer.get_extra_info("peername")
         self.connections.add(writer)
@@ -58,7 +70,12 @@ class StratumServer:
         try:
             if len(params) >= 3:
                 block_hex = params[-1]
-                call_rpc("submitblock", [block_hex])
+                if self.is_valid_block(block_hex):
+                    result = call_rpc("submitblock", [block_hex])
+                    if result is not None:
+                        LOGGER.warning("submitblock rejected: %s", result)
+                else:
+                    LOGGER.info("Skipping submitblock for invalid block candidate.")
         except BitcoinRPCError as exc:
             LOGGER.warning("submitblock failed: %s", exc)
         await self.send_result(writer, request_id, True)
