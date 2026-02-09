@@ -2,11 +2,16 @@ from flask import Flask, redirect, render_template, request, session, url_for
 from werkzeug.security import check_password_hash, generate_password_hash
 import sqlite3
 
-from config import DATABASE_PATH, SECRET_KEY
+from config import DATABASE_PATH, SECRET_KEY, STRATUM_PUBLIC_URL
 from rpc import BitcoinRPCError, call_rpc
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = SECRET_KEY
+
+
+@app.context_processor
+def inject_pool_config():
+    return {"stratum_public_url": STRATUM_PUBLIC_URL}
 
 
 def get_db():
