@@ -27,8 +27,29 @@ def init_db():
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 username TEXT UNIQUE NOT NULL,
-                password_hash TEXT NOT NULL
+                password_hash TEXT NOT NULL,
+                pool_username TEXT UNIQUE NOT NULL,
+                pool_password TEXT NOT NULL DEFAULT 'x'
             )
+            """
+        )
+        columns = {
+            row["name"]
+            for row in connection.execute("PRAGMA table_info(users)").fetchall()
+        }
+        if "pool_username" not in columns:
+            connection.execute(
+                "ALTER TABLE users ADD COLUMN pool_username TEXT UNIQUE"
+            )
+        if "pool_password" not in columns:
+            connection.execute(
+                "ALTER TABLE users ADD COLUMN pool_password TEXT NOT NULL DEFAULT 'x'"
+            )
+        connection.execute(
+            """
+            UPDATE users
+            SET pool_username = COALESCE(pool_username, username),
+                pool_password = COALESCE(pool_password, 'x')
             """
         )
         connection.commit()
@@ -56,11 +77,16 @@ def register():
             error = "Username and password are required."
         else:
             password_hash = generate_password_hash(password)
+            pool_username = username
+            pool_password = "x"
             try:
                 with get_db() as connection:
                     connection.execute(
-                        "INSERT INTO users (username, password_hash) VALUES (?, ?)",
-                        (username, password_hash),
+                        """
+                        INSERT INTO users (username, password_hash, pool_username, pool_password)
+                        VALUES (?, ?, ?, ?)
+                        """,
+                        (username, password_hash, pool_username, pool_password),
                     )
                     connection.commit()
                 return redirect(url_for("login"))
@@ -100,14 +126,26 @@ def dashboard():
         return redirect(url_for("login"))
     rpc_status = "Disconnected"
     info = None
+    pool_username = None
+    pool_password = None
     try:
         info = call_rpc("getblockchaininfo")
         rpc_status = "Connected"
     except BitcoinRPCError:
         rpc_status = "RPC error"
+    with get_db() as connection:
+        user = connection.execute(
+            "SELECT pool_username, pool_password FROM users WHERE id = ?",
+            (session.get("user_id"),),
+        ).fetchone()
+        if user:
+            pool_username = user["pool_username"]
+            pool_password = user["pool_password"]
     return render_template(
         "dashboard.html",
         username=session.get("username"),
+        pool_username=pool_username,
+        pool_password=pool_password,
         rpc_status=rpc_status,
         info=info,
     )
