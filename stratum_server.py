@@ -12,6 +12,9 @@ LOGGER = logging.getLogger("stratum")
 class StratumServer:
     def __init__(self):
         self.connections = set()
+        self.client_miners = {}
+        self.miners = {}
+        self.nonce_ranges = {}
         self.pool_state = None
 
     def collect_pool_state(self):
@@ -71,6 +74,7 @@ class StratumServer:
                 await self.dispatch(request, writer)
         finally:
             self.connections.discard(writer)
+            self.client_miners.pop(writer, None)
             writer.close()
             await writer.wait_closed()
             LOGGER.info("Client disconnected: %s", addr)
@@ -82,7 +86,15 @@ class StratumServer:
             await self.refresh_pool_state()
             await self.send_result(writer, request_id, [None, "pool_sha256d"])
         elif method == "mining.authorize":
+            miner_name = None
+            params = request.get("params", [])
+            if params:
+                miner_name = params[0]
+            if miner_name:
+                self.register_miner(writer, miner_name)
             await self.send_result(writer, request_id, True)
+            if miner_name:
+                await self.send_nonce_range(writer, miner_name)
         elif method == "mining.submit":
             await self.handle_submit(request, writer)
         else:
@@ -92,6 +104,10 @@ class StratumServer:
         request_id = request.get("id")
         params = request.get("params", [])
         LOGGER.info("Received share: %s", params)
+        miner_name = params[0] if params else None
+        if miner_name:
+            self.record_share(miner_name)
+            await self.broadcast_nonce_ranges()
         # The pool intentionally avoids reporting hash rate to Bitcoin Core.
         # We only submit full blocks if needed, without using getnetworkhashps.
         try:
@@ -106,6 +122,66 @@ class StratumServer:
         except BitcoinRPCError as exc:
             LOGGER.warning("submitblock failed: %s", exc)
         await self.send_result(writer, request_id, True)
+
+    def register_miner(self, writer, miner_name):
+        self.client_miners[writer] = miner_name
+        self.miners.setdefault(miner_name, {"share_value": 1})
+        self.recalculate_nonce_ranges()
+        LOGGER.info("Miner registered: %s", miner_name)
+
+    def record_share(self, miner_name):
+        miner = self.miners.setdefault(miner_name, {"share_value": 1})
+        miner["share_value"] += 1
+        self.recalculate_nonce_ranges()
+        LOGGER.info("Updated share value for %s: %s", miner_name, miner["share_value"])
+
+    def recalculate_nonce_ranges(self):
+        nonce_space = 2**32
+        active_miners = {name for name in self.client_miners.values() if name}
+        if not active_miners:
+            self.nonce_ranges = {}
+            return
+        weights = {
+            name: max(1, self.miners.get(name, {}).get("share_value", 1))
+            for name in active_miners
+        }
+        total_weight = sum(weights.values())
+        ordered_miners = sorted(weights.items(), key=lambda item: (-item[1], item[0]))
+        ranges = {}
+        cursor = 0
+        allocated = 0
+        for index, (name, weight) in enumerate(ordered_miners):
+            if index == len(ordered_miners) - 1:
+                size = nonce_space - allocated
+            else:
+                size = max(1, int(nonce_space * weight / total_weight))
+            ranges[name] = {"start": cursor, "size": size}
+            cursor = (cursor + size) % nonce_space
+            allocated += size
+        self.nonce_ranges = ranges
+
+    async def broadcast_nonce_ranges(self):
+        for writer, miner_name in list(self.client_miners.items()):
+            if miner_name:
+                await self.send_nonce_range(writer, miner_name)
+
+    async def send_nonce_range(self, writer, miner_name):
+        nonce_range = self.nonce_ranges.get(miner_name)
+        if not nonce_range:
+            return
+        response = json.dumps(
+            {
+                "id": None,
+                "method": "mining.set_nonce_range",
+                "params": [
+                    miner_name,
+                    nonce_range["start"],
+                    nonce_range["size"],
+                ],
+            }
+        )
+        writer.write((response + "\n").encode("utf-8"))
+        await writer.drain()
 
     async def send_result(self, writer, request_id, result):
         response = json.dumps({"id": request_id, "result": result, "error": None})
