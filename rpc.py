@@ -31,3 +31,31 @@ def call_rpc(method, params=None):
     if data.get("error"):
         raise BitcoinRPCError(data["error"])
     return data.get("result")
+
+
+def get_block_template(template_request):
+    return call_rpc("getblocktemplate", [template_request])
+
+
+def get_mining_info():
+    return call_rpc("getmininginfo")
+
+
+def get_network_hash_ps(nblocks=120, height=-1):
+    return call_rpc("getnetworkhashps", [nblocks, height])
+
+
+def get_prioritised_transactions():
+    return call_rpc("getprioritisedtransactions")
+
+
+def prioritise_transaction(txid, fee_delta, dummy=0):
+    return call_rpc("prioritisetransaction", [txid, dummy, fee_delta])
+
+
+def submit_block(hexdata, dummy="ignored"):
+    return call_rpc("submitblock", [hexdata, dummy])
+
+
+def submit_header(hexdata):
+    return call_rpc("submitheader", [hexdata])
